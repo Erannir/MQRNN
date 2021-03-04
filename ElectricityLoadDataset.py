@@ -5,11 +5,14 @@ import torch.nn.functional as F
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
+# 56 / 30
+hist_days = 7
+fct_days = 1
 
 class ElectricityLoadDataset(Dataset):
     """Sample data from electricity load dataset (per household, resampled to one hour)."""
 
-    def __init__(self, df, samples, hist_len=168, fct_len=24):
+    def __init__(self, df, samples, hist_len=24*hist_days, fct_len=24*fct_days):
         self.hist_num = hist_len
         self.fct_num = fct_len
         self.hist_len = pd.Timedelta(hours=hist_len)

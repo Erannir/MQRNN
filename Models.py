@@ -6,8 +6,6 @@ from torch import nn
 import torch.nn.functional as F
 from torch.optim import Adam
 
-from utils import quantile_loss
-
 
 class Encoder(nn.Module):
 
@@ -64,7 +62,7 @@ class Decoder(nn.Module):
         x_f = x_f.reshape(x_f.shape[0], -1).unsqueeze(1)     # dimensions: (batch, 1, horizon * embed_size)
         global_input = torch.cat((hidden_states, x_f), 2)    # dimensions: (batch, 1, hidden_size + horizon * embed_size)
 
-        contexts = self.global_mlp(global_input)   #  (c_t+1,...,c_t+K, c_a)      # dimensions: (batch, 1, context_size * (horizon + 1))
+        contexts = self.global_mlp(global_input)   # (c_t+1,...,c_t+K, c_a)      # dimensions: (batch, 1, context_size * (horizon + 1))
         batch_size, seq_len = contexts.shape[0], contexts.shape[1]
         c_t, c_a = contexts[:, :, :self.context_size * self.horizon], contexts[:, :, self.context_size * self.horizon:]
         c_t = c_t.view(batch_size, seq_len, self.horizon, self.context_size)     # dimensions: (batch, 1, horizon, context_size)
@@ -91,18 +89,16 @@ class MQRNN(nn.Module):
         self.encoder = Encoder(input_size, embed_size, hidden_size)
         self.decoder = Decoder(hidden_size, embed_size, horizon, context_size, quantiles)
 
-    def forward(self, y_e, x_e, y_d, x_d):
+    def forward(self, y_e, x_e, x_d):
         """
         Forward pass of MQRNN
         :param y_e: data vector  # dimensions: (batch, len, input_size)
         :param x_e: exogenous covariates  # dimensions: (batch, len, embed_size)
         :param y_d: data vector  # dimensions: (batch, horizon, input_size)
         :param x_d: exogenous covariates  # dimensions: (batch, horizon, embed_size)
-        :return: quantile loss.
+        :return: predictions of quantiles. # dimensions: (batch, len(hidden_states), horizon, len(quantiles))
         """
         # currently len(hidden_states) = 1
         hidden_states, (last_h, last_c) = self.encoder(y_e, x_e)     # dimensions: (batch, len(hidden_states), hidden_size)
         predictions = self.decoder(hidden_states, x_d)               # dimensions: (batch, len(hidden_states), horizon, len(quantiles))
-        y_d = y_d.unsqueeze(1)                          # dimensions: (batch, 1, horizon, 1)
-        y_d = y_d.expand(*predictions.shape)                         # dimensions: (batch, len(hidden_states), horizon, len(quantiles))
-        return quantile_loss(predictions, y_d, self.quantiles)
+        return predictions
