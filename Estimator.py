@@ -11,6 +11,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 from torch.utils.data import random_split
 from torch import optim
 
+from torch.utils.data.dataloader import default_collate
 
 from ElectricityLoadDataset import ElectricityLoadDataset
 from Models import MQRNN
@@ -19,21 +20,22 @@ from utils import quantile_loss
 DATA_DIR = pathlib.Path("data")
 MODEL_DIR = pathlib.Path("models")
 GRAPH_DIR = pathlib.Path("graphs")
-device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
 
 plt.rcParams["figure.figsize"] = (15, 6)
 input_size = 1  # y
-embed_size = 3  # x
+embed_size = 9  # x
 hidden_size = 30  # for lstm: "both with a state dimension of 30"
 context_size = 12  # for c_t/c_a
 horizon = 24
 quantiles = [0.01, 0.25, 0.5, 0.75, 0.99]
-samples = 10
+samples = 5
 
 batch_size = 32
 random_seed = 42
 
 print_every = 50
+epochs = 5
 
 
 def retrieve_data(samples=100, val_split=0.2, test_split=0.1):
@@ -44,8 +46,8 @@ def retrieve_data(samples=100, val_split=0.2, test_split=0.1):
                          decimal=",")
     df.rename({"Unnamed: 0": "timestamp"}, axis=1, inplace=True)
     df = df.resample("1H", on="timestamp").mean()
-    scaled_data = df / df[df != 0].mean() - 1
-    ds = ElectricityLoadDataset(scaled_data, samples)
+    #scaled_data = df / df[df != 0].mean() - 1
+    ds = ElectricityLoadDataset(df, samples)
 
     ds_size = len(ds)
     val_size = int(val_split * ds_size)
@@ -53,9 +55,9 @@ def retrieve_data(samples=100, val_split=0.2, test_split=0.1):
     split_sizes = [ds_size - val_size - test_size, val_size, test_size]
     train_ds, val_ds, test_ds = random_split(ds, split_sizes)
 
-    train_loader = torch.utils.data.DataLoader(train_ds, batch_size=batch_size, shuffle=True, pin_memory=True)
-    val_loader = torch.utils.data.DataLoader(val_ds, batch_size=batch_size, shuffle=True, pin_memory=True)
-    test_loader = torch.utils.data.DataLoader(test_ds, batch_size=batch_size, shuffle=True, pin_memory=True)
+    train_loader = torch.utils.data.DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+    val_loader = torch.utils.data.DataLoader(val_ds, batch_size=batch_size, shuffle=True)
+    test_loader = torch.utils.data.DataLoader(test_ds, batch_size=batch_size, shuffle=True)
 
     return train_loader, val_loader, test_loader
 
@@ -98,7 +100,6 @@ def train(model, data_loaders, optimizer, scheduler=None, num_epochs=1):
 
         # Eval Loop
         model.eval()
-        num_samples = 0
         loss = 0
         for t, (enc_data, dec_data) in enumerate(val_loader):
             loss += calculate_loss(model, enc_data, dec_data).item()
@@ -110,10 +111,10 @@ def train(model, data_loaders, optimizer, scheduler=None, num_epochs=1):
 
 
 def forcast(model, enc_data, dec_data, quantiles):
-    y_e, x_e = enc_data[:, :, 0].view(enc_data.shape[0], enc_data.shape[1], -1), enc_data[:, :, 1:]
-    y_d, x_d = dec_data[:, :, 0].view(dec_data.shape[0], dec_data.shape[1], -1), dec_data[:, :, 1:]
+    y_e, x_e = enc_data[..., 0:input_size], enc_data[..., input_size:]
+    y_d, x_d = dec_data[..., 0:input_size], dec_data[..., input_size:]
 
-    predictions = model(y_e, x_e, x_d)                # dimensions: (batch, len(hidden_states), horizon, len(quantiles))
+    predictions = model(y_e, x_e, x_d).cpu()              # dimensions: (batch, len(hidden_states), horizon, len(quantiles))
     predictions = predictions.squeeze().detach().numpy()  # dimensions: (horizon, len(quantiles))
 
     len_hist = y_e.shape[1]
@@ -138,23 +139,22 @@ def forcast(model, enc_data, dec_data, quantiles):
         plt.savefig(GRAPH_DIR.joinpath(str(i)))
         plt.close()
 
-
 if __name__ == "__main__":
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
     data_loaders = retrieve_data(samples=samples)
     model = MQRNN(input_size, embed_size, hidden_size, context_size, horizon, quantiles).to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.1, verbose=True)
 
-    train(model, data_loaders, optimizer, scheduler, num_epochs=5)
+    train(model, data_loaders, optimizer, scheduler, num_epochs=epochs)
 
     model.eval()
     dataiter = iter(data_loaders[2])
     enc_data, dec_data = dataiter.next()
     forcast(model, enc_data, dec_data, quantiles)
-
 
     # Run one step for debugging
     """

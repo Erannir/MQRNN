@@ -19,7 +19,6 @@ class Encoder(nn.Module):
         super().__init__()
         self.lstm = nn.LSTM(input_size + embed_size, hidden_size, batch_first=True)
 
-
     def forward(self, y, x):
         """
         Forward pass of encoder
@@ -49,7 +48,6 @@ class Decoder(nn.Module):
         self.quantiles = quantiles
         self.global_mlp = nn.Linear(input_size + embed_size * horizon, context_size * (horizon + 1))
         self.local_mlp = nn.Linear(context_size * 2 + embed_size, len(quantiles))
-
 
     def forward(self, hidden_states, x_f):
         """
