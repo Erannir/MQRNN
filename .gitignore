@@ -1,6 +1,7 @@
 /.env
 /.vscode
 /__pycache__
-/model
+/models
 /graphs
 /data
+*.bat
