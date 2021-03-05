@@ -25,10 +25,10 @@ plt.rcParams["figure.figsize"] = (15, 6)
 input_size = 1  # y
 embed_size = 3  # x
 hidden_size = 30  # for lstm: "both with a state dimension of 30"
-context_size = 8  # for c_t/c_a
+context_size = 12  # for c_t/c_a
 horizon = 24
 quantiles = [0.01, 0.25, 0.5, 0.75, 0.99]
-samples = 30
+samples = 10
 
 batch_size = 32
 random_seed = 42
@@ -61,8 +61,8 @@ def retrieve_data(samples=100, val_split=0.2, test_split=0.1):
 
 
 def calculate_loss(model, enc_data, dec_data):
-    y_e, x_e = enc_data[:, :, 0].view(enc_data.shape[0], enc_data.shape[1], -1), enc_data[:, :, 1:]
-    y_d, x_d = dec_data[:, :, 0].view(dec_data.shape[0], dec_data.shape[1], -1), dec_data[:, :, 1:]
+    y_e, x_e = enc_data[..., 0:input_size], enc_data[..., input_size:]
+    y_d, x_d = dec_data[..., 0:input_size], dec_data[..., input_size:]
 
     predictions = model(y_e, x_e, x_d)
     loss = quantile_loss(predictions, y_d, quantiles)
@@ -78,7 +78,17 @@ def train(model, data_loaders, optimizer, scheduler=None, num_epochs=1):
         # Train Loop
         model.train()
         for t, (enc_data, dec_data) in enumerate(train_loader):
-            loss = calculate_loss(model, enc_data, dec_data)
+
+            # (enc_data, dec_data) = ( (batch_size, seq_len, embed_size) , (batch_size, horizon, embed_size) )
+            unified_data = torch.cat((enc_data, dec_data), 1)  # (batch_size, seq_len + horizon, embed_size)
+            h = dec_data.shape[1]
+            horizons = []
+            for i in range(1, enc_data.shape[1]+1):
+                slice = unified_data[:, i:i+h, :]
+                horizons.append(slice)
+            horizons = torch.stack(horizons, dim=1)  # (batch_size, seq_len, horizon, embed_size)
+
+            loss = calculate_loss(model, enc_data, horizons)
             if (t + 1) % print_every == 0:
                 print(str(datetime.datetime.now()) + ' t = %d, loss = %.4f' % (t + 1, loss.item()))
 
@@ -132,7 +142,7 @@ def forcast(model, enc_data, dec_data, quantiles):
 if __name__ == "__main__":
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    data_loaders = retrieve_data(samples=5)
+    data_loaders = retrieve_data(samples=samples)
     model = MQRNN(input_size, embed_size, hidden_size, context_size, horizon, quantiles).to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)

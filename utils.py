@@ -4,15 +4,15 @@ import torch.functional as F
 def quantile_loss(pred, target, quantiles):
     """
     Calculate quantile loss over all dimensions.
-    :param pred: prediction for quantiles                     # dimensions: (batch, len(hidden_states), horizon, len(quantiles))
-    :param target: real values, expanded to match pred shape  # dimensions: (batch, len(hidden_states), horizon, len(quantiles))
-    :param quantiles: list of quantiles                       # dimensions: len(quantiles)
+    :param pred: prediction for quantiles                     # dimensions: (batch, seq_len, horizon, num_quantiles)
+    :param target: real values, expanded to match pred shape  # dimensions: (batch, seq_len, horizon, 1)
+    :param quantiles: list of quantiles                       # dimensions: num_quantiles
     :return: total loss on batch_size, T, K, Q
     """
-    target = target.unsqueeze(1)  # dimensions: (batch, 1, horizon, 1)
+    #target = target.unsqueeze(1)  # dimensions: (batch, 1, horizon, 1)
     target = target.expand(*pred.shape)  # dimensions: (batch, len(hidden_states), horizon, len(quantiles))
 
-    quantiles = torch.Tensor(quantiles).unsqueeze(0).unsqueeze(0).unsqueeze(0)  # dimensions: (1, 1, 1, len(quantiles))
+    quantiles = torch.Tensor(quantiles).view(*((len(pred.shape)-1) * [1]), -1)  # unsqueezing 2/3 times
     quantiles = quantiles.expand(pred.shape)
 
     relu = torch.nn.ReLU()
