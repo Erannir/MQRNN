@@ -1,6 +1,5 @@
 import torch
 import torch.functional as F
-device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
 
 def quantile_loss(pred, target, quantiles):
     """
@@ -11,6 +10,8 @@ def quantile_loss(pred, target, quantiles):
     :return: total loss on batch_size, T, K, Q
     """
     #target = target.unsqueeze(1)  # dimensions: (batch, 1, horizon, 1)
+    device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
+
     target = target.expand(*pred.shape)  # dimensions: (batch, len(hidden_states), horizon, len(quantiles))
 
     quantiles = torch.Tensor(quantiles).view(*((len(pred.shape)-1) * [1]), -1)  # unsqueezing 2/3 times

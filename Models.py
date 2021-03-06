@@ -59,7 +59,8 @@ class Decoder(nn.Module):
         # In eval, all dimensions of seq_len disappear (reducing dimensionality by 1)
         x_f_reshaped = x_f.reshape(*x_f.shape[:-2], -1)             # dimensions: (batch, seq_len, horizon * embed_size)
         if self.eval():
-            print(5)
+            #print(5)
+            pass
         global_input = torch.cat((hidden_states, x_f_reshaped), -1)  # dimensions: (batch, seq_len, hidden_size + horizon * embed_size)
 
         contexts = self.global_mlp(global_input)   # (c_t+1,...,c_t+K, c_a)      # dimensions: (batch, seq_len, context_size * (horizon + 1))
