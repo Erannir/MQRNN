@@ -92,7 +92,7 @@ class Decoder(nn.Module):
         quantiles = self.local_mlp(local_input)                                                 # dimensions: (batch, seq_len, horizon, len(quantiles))
 
         for i in range(self.deep_local_mlp):
-            local_input=self.relu(local_input)
+            quantiles=self.relu(quantiles)
             quantiles=self.deep_local(quantiles)
         return quantiles
 
