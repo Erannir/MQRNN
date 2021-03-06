@@ -6,8 +6,8 @@ import matplotlib as mpl
 import datetime
 
 
-
 import torch
+
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 from torch.utils.data import random_split
@@ -25,12 +25,13 @@ device = device('cuda:0') if cuda.is_available() else device('cpu')
 plt.rcParams["figure.figsize"] = (15, 6)
 input_size = 1  # y
 embed_size = 9 # x
+
 hidden_size = 30  # for lstm: "both with a state dimension of 30"
 context_size = 12  # for c_t/c_a
 horizon = 24
 quantiles = [0.01, 0.25, 0.5, 0.75, 0.99]
 
-samples = 100
+samples = 10
 
 batch_size = 32
 random_seed = 42
@@ -38,8 +39,11 @@ random_seed = 42
 print_every = 50
 epochs = 2
 
+deep_local_mlp=1
+deep_global_mlp=1
 
-def retrieve_data(samples=100, val_split=0.2, test_split=0.1):
+
+def retrieve_data(samples=100, val_split=0.2, test_split=0.1,features=range(9)):
     # eldata = pd.read_parquet(DATA_DIR.joinpath("LD2011_2014.txt"))
     df = pd.read_csv(DATA_DIR.joinpath("LD2011_2014.txt"),
                          parse_dates=[0],
@@ -48,7 +52,7 @@ def retrieve_data(samples=100, val_split=0.2, test_split=0.1):
     df.rename({"Unnamed: 0": "timestamp"}, axis=1, inplace=True)
     df = df.resample("1H", on="timestamp").mean()
 
-    ds = ElectricityLoadDataset(df, samples)
+    ds = ElectricityLoadDataset(df, samples,features=features)
 
     ds_size = len(ds)
     val_size = int(val_split * ds_size)
@@ -127,6 +131,7 @@ def forcast(model, enc_data, dec_data, quantiles):
     forcast_range = np.arange(len_hist, len_hist + len_fct, 1)
 
 
+
     for i in range(y_e.shape[0]):
         y_h = y_e[i].squeeze().cpu()
         y_f = y_d[i].squeeze().cpu()
@@ -144,14 +149,16 @@ def forcast(model, enc_data, dec_data, quantiles):
             plt.fill_between(forcast_range, predictions[i, :, j], predictions[i, :, j + 1], color=cmap.to_rgba(j+1))
 
         plt.legend(loc=0)
+
         plt.savefig(GRAPH_DIR.joinpath(str(i)))
         plt.close()
+
 
 if __name__ == "__main__":
 
 
     data_loaders = retrieve_data(samples=samples)
-    model = MQRNN(input_size, embed_size, hidden_size, context_size, horizon, quantiles).to(device)
+    model = MQRNN(input_size, embed_size, hidden_size, context_size, horizon, quantiles,deep_local_mlp,deep_global_mlp).to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.1, verbose=True)

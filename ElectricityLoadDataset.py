@@ -15,7 +15,7 @@ fct_days = 1
 class ElectricityLoadDataset(Dataset):
     """Sample data from electricity load dataset (per household, resampled to one hour)."""
 
-    def __init__(self, df, samples, hist_len=24 * hist_days, fct_len=24 * fct_days):
+    def __init__(self, df, samples, hist_len=24 * hist_days, fct_len=24 * fct_days,features=range(9)):
         self.hist_num = hist_len
         self.fct_num = fct_len
         self.hist_len = pd.Timedelta(hours=hist_len)
@@ -25,6 +25,7 @@ class ElectricityLoadDataset(Dataset):
 
         self.max_ts = df.index.max() - self.hist_len - self.fct_len + self.offset
         self.raw_data = df.copy()
+        self.features=features
 
         assert samples <= self.raw_data[:self.max_ts].shape[0]
 
@@ -63,11 +64,13 @@ class ElectricityLoadDataset(Dataset):
         self.raw_data["night"] = ((self.raw_data.index.hour < 7) & (self.raw_data.index.hour>21)).astype(float)
         self.raw_data["winter"] = ((self.raw_data.index.month < 4) & (self.raw_data.index.month > 10)).astype(float)
         self.raw_data["Holiday"] = ((self.raw_data.index.is_year_end | self.raw_data.index.is_year_start) | (( self.raw_data.index.month==12) & (self.raw_data.index.daysinmonth==25))).astype(float)
-        self.raw_data["winter_daily_cycle"] =self.raw_data["daily_cycle"]*self.raw_data["night"]
-        self.raw_data["summer_daily_cycle"] =self.raw_data["daily_cycle"]*(1-self.raw_data["night"] )
+        self.raw_data["winter_daily_cycle"] =self.raw_data["daily_cycle"]*self.raw_data["winter"]
+        self.raw_data["summer_daily_cycle"] =self.raw_data["daily_cycle"]*(1-self.raw_data["winter"] )
 
         #self.calendar_features = ["yearly_cycle", "weekly_cycle", "daily_cycle"]
         self.calendar_features = ["yearly_cycle", "weekly_cycle", "daily_cycle", "weekend", "night", "winter", "Holiday", "summer_daily_cycle", "winter_daily_cycle"]
+        self.calendar_features=[val for i, val in enumerate(self.calendar_features) if i in self.features]
+
 
     def __len__(self):
         return self.samples.shape[0]
@@ -76,6 +79,7 @@ class ElectricityLoadDataset(Dataset):
         household, start_ts = self.samples.iloc[idx]
 
         hs, he = start_ts, start_ts + self.hist_len - self.offset
+
         fs, fe = he + self.offset, he + self.fct_len
 
         hist_data = self.raw_data.loc[hs:, [household] + self.calendar_features].iloc[:self.hist_num]
