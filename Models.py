@@ -17,6 +17,7 @@ class Encoder(nn.Module):
         :param hidden_size (int): hidden Size of LSTM (dimensionality)
         """
         super().__init__()
+
         self.lstm = nn.LSTM(input_size + embed_size, hidden_size, batch_first=True)
 
     def forward(self, y, x):
@@ -32,7 +33,7 @@ class Encoder(nn.Module):
 
 class Decoder(nn.Module):
 
-    def __init__(self, input_size, embed_size, horizon, context_size, quantiles):
+    def __init__(self, input_size, embed_size, horizon, context_size, quantiles,deep_local_mlp=0,deep_global_mlp=0):
         """ Init Decoder
         :param input_size (int): size of data received from Encoder (h_t)
         :param embed_size (int): size of exogenous covariates (x)
@@ -75,6 +76,7 @@ class Decoder(nn.Module):
         c_a = c_a.expand(*c_a.shape[:-2], self.horizon, self.context_size)                      # dimensions: (batch, seq_len, horizon, context_size)
 
         # Concatenating all inputs to local mlp
+
         local_input = torch.cat((c_t, c_a, x_f), dim=-1)                                        # dimensions: (batch, seq_len, horizon, 2 * context_size + embed_size)
         quantiles = self.local_mlp(local_input)                                                 # dimensions: (batch, seq_len, horizon, len(quantiles))
         return quantiles
@@ -82,7 +84,7 @@ class Decoder(nn.Module):
 
 class MQRNN(nn.Module):
 
-    def __init__(self, input_size, embed_size, hidden_size, context_size, horizon, quantiles):
+    def __init__(self, input_size, embed_size, hidden_size, context_size, horizon, quantiles,deep_local_mlp=0,deep_global_mlp=0):
         """
         Init MQRNN Module
         :param embed_size (int): size of exogenous covariates (x)
