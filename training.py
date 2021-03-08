@@ -10,7 +10,6 @@ import torch
 
 from torch.utils.data import DataLoader
 from torch.utils.data import random_split
-from torch import cuda
 
 from ElectricityLoadDataset import ElectricityLoadDataset
 from utils import quantile_loss
@@ -33,9 +32,6 @@ def retrieve_data(samples=100, val_split=0.2, test_split=0.1,features=range(9),b
     split_sizes = [ds_size - val_size - test_size, val_size, test_size]
     train_ds, val_ds, test_ds = random_split(ds, split_sizes)
 
-    # train_loader = torch.utils.data.DataLoader(train_ds, batch_size=batch_size, shuffle=True,pin_memory= cuda.is_available()==False)
-    # val_loader = torch.utils.data.DataLoader(val_ds, batch_size=batch_size, shuffle=True,pin_memory= cuda.is_available()==False)
-    # test_loader = torch.utils.data.DataLoader(test_ds, batch_size=batch_size, shuffle=True,pin_memory= cuda.is_available()==False)
     train_loader = torch.utils.data.DataLoader(train_ds, batch_size=batch_size, shuffle=True,pin_memory= True,num_workers=8)
     val_loader = torch.utils.data.DataLoader(val_ds, batch_size=batch_size, shuffle=True,pin_memory= True,num_workers=8)
     test_loader = torch.utils.data.DataLoader(test_ds, batch_size=batch_size, shuffle=True,pin_memory=True,num_workers=8)
@@ -63,7 +59,6 @@ def train(model, data_loaders, optimizer, scheduler=None, num_epochs=5,print_eve
         # Train Loop
         model.train()
         for t, (enc_data, dec_data) in enumerate(train_loader):
-          #  enc_data, dec_data=enc_data.cuda(), dec_data.cuda()
             enc_data, dec_data=enc_data, dec_data
 
             # (enc_data, dec_data) = ( (batch_size, seq_len, embed_size) , (batch_size, horizon, embed_size) )
@@ -86,19 +81,11 @@ def train(model, data_loaders, optimizer, scheduler=None, num_epochs=5,print_eve
         scheduler.step(loss)
 
 
-        # Eval Loop
-        #model.eval()
-        # loss = 0
-        # for t, (enc_data, dec_data) in enumerate(val_loader):
-        #     loss += calculate_loss(model, enc_data, dec_data).item()
-        # loss = loss / (t+1)
-
         loss_mean = loss_mean / (t+1)
 
         print(str(datetime.datetime.now()) + ' Got average loss of (%.4f)' % (loss_mean),"last_lr =",optimizer.param_groups[0]['lr'])
-        #torch.save(model.state_dict(), pathlib.Path(MODEL_DIR).joinpath("epoch_{0}_loss_{1}".format(epoch, loss)))
-        # if scheduler:
-        #     scheduler.step(loss)
+
+        torch.save(model.state_dict(), pathlib.Path(MODEL_DIR).joinpath("epoch_{0}_loss_{1}".format(epoch, loss)))
 
 
 
@@ -109,7 +96,6 @@ def forcast(model, enc_data, dec_data, quantiles = [0.01, 0.25, 0.5, 0.75, 0.99]
     y_e, x_e = enc_data[..., 0:input_size], enc_data[..., input_size:]
     y_d, x_d = dec_data[..., 0:input_size], dec_data[..., input_size:]
 
-    #predictions = model(y_e, x_e, x_d).cpu()          # dimensions: (batch, len(hidden_states), horizon, len(quantiles))
 
     predictions = model(y_e, x_e, x_d)        # dimensions: (batch, len(hidden_states), horizon, len(quantiles))
     predictions = predictions.squeeze().detach().numpy()  # dimensions: (horizon, len(quantiles))
@@ -134,13 +120,11 @@ def forcast(model, enc_data, dec_data, quantiles = [0.01, 0.25, 0.5, 0.75, 0.99]
         cmap = mpl.cm.ScalarMappable(norm=norm, cmap=mpl.cm.Blues)
         cmap.set_array([])
         for j, q in enumerate(quantiles[:-1]):
-            #plt.plot(forcast_range, predictions[i, :, j], label=str(q), c=cmap.to_rgba(j + 1))
-            #plt.fill_between(forcast_range, predictions[i, :, j], predictions[i, :, j + 1], color='k', alpha=0.5*(j+1)/len(quantiles))
             plt.fill_between(forcast_range, predictions[i, :, j], predictions[i, :, j + 1], color=cmap.to_rgba(j+1))
 
         plt.legend(loc=0)
 
-        plt.savefig( pathlib.Path(GRAPH_DIR).joinpath(str(i)))
+        plt.savefig( pathlib.Path(GRAPH_DIR).joinpath("series"+str(i)))
         plt.close()
 
 

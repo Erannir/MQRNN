@@ -84,7 +84,6 @@ class ElectricityLoadDataset(Dataset):
 
         hist_data = self.raw_data.loc[hs:, [household] + self.calendar_features].iloc[:self.hist_num]
         fct_data = self.raw_data.loc[fs:, [household] + self.calendar_features].iloc[:self.fct_num]
-        device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
 
         return (torch.Tensor(hist_data.values).to(device),
                 torch.Tensor(fct_data.values).to(device))
