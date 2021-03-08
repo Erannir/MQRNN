@@ -95,7 +95,7 @@ def train(model, data_loaders, optimizer, scheduler=None, num_epochs=5,print_eve
 
         loss_mean = loss_mean / (t+1)
 
-        print(str(datetime.datetime.now()) + ' Got validation average loss of (%.4f)' % (loss_mean),"last_lr =",optimizer.param_groups[0]['lr'])
+        print(str(datetime.datetime.now()) + ' Got average loss of (%.4f)' % (loss_mean),"last_lr =",optimizer.param_groups[0]['lr'])
         #torch.save(model.state_dict(), pathlib.Path(MODEL_DIR).joinpath("epoch_{0}_loss_{1}".format(epoch, loss)))
         # if scheduler:
         #     scheduler.step(loss)
