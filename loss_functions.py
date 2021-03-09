@@ -1,5 +1,6 @@
 import torch
 
+
 def quantile_loss(pred, target, quantiles):
     """
     Calculate quantile loss over all dimensions.
@@ -13,7 +14,7 @@ def quantile_loss(pred, target, quantiles):
     target = target.expand(*pred.shape)  # dimensions: (batch, len(hidden_states), horizon, len(quantiles))
 
     quantiles = torch.Tensor(quantiles).view(*((len(pred.shape)-1) * [1]), -1)  # unsqueezing 2/3 times
-    quantiles = quantiles.expand(pred.shape).to(device)
+    quantiles = quantiles.expand(pred.shape)
 
     relu = torch.nn.ReLU()
     loss = quantiles * relu(target - pred) + (1 - quantiles) * relu(pred - target)

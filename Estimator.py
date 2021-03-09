@@ -11,11 +11,11 @@ import torch
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 from torch.utils.data import random_split
-from torch import optim,device,cuda
+from torch import optim, device, cuda
 
 from ElectricityLoadDataset import ElectricityLoadDataset
 from Models import MQRNN
-from utils import quantile_loss
+from loss_functions import quantile_loss
 
 DATA_DIR = pathlib.Path("data")
 MODEL_DIR = pathlib.Path("models")
@@ -24,7 +24,7 @@ device = device('cuda:0') if cuda.is_available() else device('cpu')
 
 plt.rcParams["figure.figsize"] = (15, 6)
 input_size = 1  # y
-embed_size = 9 # x
+embed_size = 9  # x
 
 hidden_size = 30  # for lstm: "both with a state dimension of 30"
 context_size = 12  # for c_t/c_a
@@ -39,11 +39,7 @@ random_seed = 42
 print_every = 50
 epochs = 2
 
-deep_local_mlp=1
-deep_global_mlp=1
-
-
-def retrieve_data(samples=100, val_split=0.2, test_split=0.1,features=range(9)):
+def retrieve_data(samples=100, val_split=0.2, test_split=0.1, features=range(9)):
     # eldata = pd.read_parquet(DATA_DIR.joinpath("LD2011_2014.txt"))
     df = pd.read_csv(DATA_DIR.joinpath("LD2011_2014.txt"),
                          parse_dates=[0],
@@ -52,7 +48,7 @@ def retrieve_data(samples=100, val_split=0.2, test_split=0.1,features=range(9)):
     df.rename({"Unnamed: 0": "timestamp"}, axis=1, inplace=True)
     df = df.resample("1H", on="timestamp").mean()
 
-    ds = ElectricityLoadDataset(df, samples,features=features)
+    ds = ElectricityLoadDataset(df, samples, features=features)
 
     ds_size = len(ds)
     val_size = int(val_split * ds_size)
@@ -116,40 +112,32 @@ def train(model, data_loaders, optimizer, scheduler=None, num_epochs=1):
             scheduler.step(loss)
 
 
-
-
 def forcast(model, enc_data, dec_data, quantiles):
     y_e, x_e = enc_data[..., 0:input_size], enc_data[..., input_size:]
     y_d, x_d = dec_data[..., 0:input_size], dec_data[..., input_size:]
-
 
     predictions = model(y_e, x_e, x_d).cpu()          # dimensions: (batch, len(hidden_states), horizon, len(quantiles))
     predictions = predictions.squeeze().detach().numpy()  # dimensions: (horizon, len(quantiles))
 
     len_hist = y_e.shape[1]
     len_fct = y_d.shape[1]
-    forcast_range = np.arange(len_hist, len_hist + len_fct, 1)
-
-
+    forecast_range = np.arange(len_hist, len_hist + len_fct, 1)
 
     for i in range(y_e.shape[0]):
         y_h = y_e[i].squeeze().cpu()
         y_f = y_d[i].squeeze().cpu()
         plt.plot(np.arange(0, len_hist+1, 1),torch.cat((y_h,y_f[0].view(1))) , label="historical data")
 
-        plt.plot(forcast_range, y_f, label="actual", c="black")
+        plt.plot(forecast_range, y_f, label="actual", c="black")
 
         c = np.arange(len(quantiles)+1)
         norm = mpl.colors.Normalize(vmin=c.min(), vmax=c.max())
         cmap = mpl.cm.ScalarMappable(norm=norm, cmap=mpl.cm.Blues)
         cmap.set_array([])
         for j, q in enumerate(quantiles[:-1]):
-            #plt.plot(forcast_range, predictions[i, :, j], label=str(q), c=cmap.to_rgba(j + 1))
-            #plt.fill_between(forcast_range, predictions[i, :, j], predictions[i, :, j + 1], color='k', alpha=0.5*(j+1)/len(quantiles))
-            plt.fill_between(forcast_range, predictions[i, :, j], predictions[i, :, j + 1], color=cmap.to_rgba(j+1))
+            plt.fill_between(forecast_range, predictions[i, :, j], predictions[i, :, j + 1], color=cmap.to_rgba(j+1))
 
         plt.legend(loc=0)
-
         plt.savefig(GRAPH_DIR.joinpath(str(i)))
         plt.close()
 

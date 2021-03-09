@@ -1,10 +1,8 @@
-
 import torch
 from torch import nn
 
 
 class Encoder(nn.Module):
-
     def __init__(self, input_size, embed_size, hidden_size):
         """
         Init Encoder
@@ -13,7 +11,6 @@ class Encoder(nn.Module):
         :param hidden_size (int): hidden Size of LSTM (dimensionality)
         """
         super().__init__()
-
         self.lstm = nn.LSTM(input_size + embed_size, hidden_size, batch_first=True)
 
     def forward(self, y, x):
@@ -28,8 +25,7 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-
-    def __init__(self, input_size, embed_size, horizon, context_size, quantiles,deep_local_mlp=0,deep_global_mlp=0):
+    def __init__(self, input_size, embed_size, horizon, context_size, quantiles):
         """ Init Decoder
         :param input_size (int): size of data received from Encoder (h_t)
         :param embed_size (int): size of exogenous covariates (x)
@@ -45,11 +41,6 @@ class Decoder(nn.Module):
         self.quantiles = quantiles
         self.global_mlp = nn.Linear(input_size + embed_size * horizon, context_size * (horizon + 1))
         self.local_mlp = nn.Linear(context_size * 2 + embed_size, len(quantiles))
-        self.deep_local = nn.Linear(len(quantiles),len(quantiles))
-        self.deep_global = nn.Linear(context_size * (horizon + 1), context_size * (horizon + 1))
-        self.deep_global_mlp=deep_global_mlp
-        self.deep_local_mlp = deep_local_mlp
-        self.relu=nn.ReLU()
 
     def forward(self, hidden_states, x_f):
         """
@@ -60,18 +51,9 @@ class Decoder(nn.Module):
         """
         # In eval, all dimensions of seq_len disappear (reducing dimensionality by 1)
         x_f_reshaped = x_f.reshape(*x_f.shape[:-2], -1)             # dimensions: (batch, seq_len, horizon * embed_size)
-        if self.eval():
-            #print(5)
-            pass
         global_input = torch.cat((hidden_states, x_f_reshaped), -1)  # dimensions: (batch, seq_len, hidden_size + horizon * embed_size)
+
         contexts = self.global_mlp(global_input)   # (c_t+1,...,c_t+K, c_a)      # dimensions: (batch, seq_len, context_size * (horizon + 1))
-
-        for i in range(self.deep_global_mlp):
-
-            contexts=self.relu(contexts)
-            contexts = self.deep_global(contexts)
-
-
 
         # Reshaping contexts, concatenated -> stacked
         contexts = contexts.view(*contexts.shape[:-1], self.horizon + 1, self.context_size)     # dimensions: (batch, seq_len, horizon + 1, context_size)
@@ -83,19 +65,13 @@ class Decoder(nn.Module):
         c_a = c_a.expand(*c_a.shape[:-2], self.horizon, self.context_size)                      # dimensions: (batch, seq_len, horizon, context_size)
 
         # Concatenating all inputs to local mlp
-
         local_input = torch.cat((c_t, c_a, x_f), dim=-1)                                        # dimensions: (batch, seq_len, horizon, 2 * context_size + embed_size)
         quantiles = self.local_mlp(local_input)                                                 # dimensions: (batch, seq_len, horizon, len(quantiles))
-
-        for i in range(self.deep_local_mlp):
-            quantiles=self.relu(quantiles)
-            quantiles=self.deep_local(quantiles)
         return quantiles
 
 
 class MQRNN(nn.Module):
-
-    def __init__(self, input_size, embed_size, hidden_size, context_size, horizon, quantiles,deep_local_mlp=0,deep_global_mlp=0):
+    def __init__(self, input_size, embed_size, hidden_size, context_size, horizon, quantiles):
         """
         Init MQRNN Module
         :param embed_size (int): size of exogenous covariates (x)
@@ -107,7 +83,7 @@ class MQRNN(nn.Module):
         super().__init__()
         self.quantiles = quantiles
         self.encoder = Encoder(input_size, embed_size, hidden_size)
-        self.decoder = Decoder(hidden_size, embed_size, horizon, context_size, quantiles,deep_local_mlp=deep_local_mlp,deep_global_mlp=deep_global_mlp)
+        self.decoder = Decoder(hidden_size, embed_size, horizon, context_size, quantiles)
 
     def forward(self, y_e, x_e, x_d):
         """
