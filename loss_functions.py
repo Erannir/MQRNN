@@ -9,8 +9,6 @@ def quantile_loss(pred, target, quantiles):
     :param quantiles: list of quantiles                       # dimensions: num_quantiles
     :return: total loss on batch_size, T, K, Q
     """
-    #target = target.unsqueeze(1)  # dimensions: (batch, 1, horizon, 1)
-
     target = target.expand(*pred.shape)  # dimensions: (batch, len(hidden_states), horizon, len(quantiles))
 
     quantiles = torch.Tensor(quantiles).view(*((len(pred.shape)-1) * [1]), -1)  # unsqueezing 2/3 times

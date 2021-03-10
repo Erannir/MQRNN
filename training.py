@@ -14,6 +14,7 @@ from torch.utils.data import random_split
 from ElectricityLoadDataset import ElectricityLoadDataset
 from loss_functions import quantile_loss
 from Models import MQRNN
+from plot_utils import plot_forecast
 
 random_seed = 42
 torch.manual_seed(0)
@@ -99,7 +100,7 @@ class Estimator:
             if scheduler:
                 scheduler.step(loss)
 
-    def forcast(self, model, enc_data, dec_data, quantiles=[0.01, 0.25, 0.5, 0.75, 0.99], input_size=1):
+    def forcast(self, model, enc_data, dec_data, input_size=1, plot=False, save=False):
         model.eval()
         y_e, x_e = enc_data[..., 0:input_size], enc_data[..., input_size:]
         y_d, x_d = dec_data[..., 0:input_size], dec_data[..., input_size:]
@@ -107,27 +108,17 @@ class Estimator:
         predictions = model(y_e, x_e, x_d)        # dimensions: (batch, len(hidden_states), horizon, len(quantiles))
         predictions = predictions.squeeze().detach().numpy()  # dimensions: (horizon, len(quantiles))
 
-        len_hist = y_e.shape[1]
-        len_fct = y_d.shape[1]
-        forecast_range = np.arange(len_hist, len_hist + len_fct, 1)
+        if not plot:
+            return predictions
 
+        axes = []
         for i in range(y_e.shape[0]):
-            y_h = y_e[i].squeeze()
-            y_f = y_d[i].squeeze()
-            plt.plot(np.arange(0, len_hist+1, 1), torch.cat((y_h, y_f[0].view(1))), label="historical data")
-
-            plt.plot(forecast_range, y_f, label="actual", c="black")
-
-            c = np.arange(len(quantiles)+1)
-            norm = mpl.colors.Normalize(vmin=c.min(), vmax=c.max())
-            cmap = mpl.cm.ScalarMappable(norm=norm, cmap=mpl.cm.Blues)
-            cmap.set_array([])
-            for j, q in enumerate(quantiles[:-1]):
-                plt.fill_between(forecast_range, predictions[i, :, j], predictions[i, :, j + 1], color=cmap.to_rgba(j+1))
-
-            plt.legend(loc=0)
-            plt.savefig(pathlib.Path(GRAPH_DIR).joinpath(str(i)))
-            plt.close()
+            y_h = y_e[i].squeeze().numpy()
+            y_f = y_d[i].squeeze().numpy()
+            path = pathlib.Path(GRAPH_DIR).joinpath("ts_"+str(i)) if save else None
+            ax = plot_forecast(y_h, y_f, predictions[i, :, :], save=save, path=path)
+            axes.append(ax)
+        return axes
 
 
 if __name__ == "__main__":
@@ -137,15 +128,15 @@ if __name__ == "__main__":
     context_size = 8  # for c_t/c_a
     horizon = 24
     quantiles = [0.01, 0.25, 0.5, 0.75, 0.99]
-    samples = 10
+    samples = 100
     batch_size = 32
-    epochs = 1
+    epochs = 10
     print_every = 50
 
     MODEL_DIR.mkdir(exist_ok=True)
     GRAPH_DIR.mkdir(exist_ok=True)
 
-    train_loader, val_loader, test_loader = retrieve_data(samples=samples)
+    train_loader, val_loader, test_loader = retrieve_data(samples=samples, batch_size=batch_size)
     model = MQRNN(input_size, embed_size, hidden_size, context_size, horizon, quantiles)
 
     optimizer = optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
@@ -160,4 +151,4 @@ if __name__ == "__main__":
     model.eval()
     dataiter = iter(test_loader)
     enc_data, dec_data = dataiter.next()
-    estimator.forcast(model, enc_data, dec_data, quantiles)
+    estimator.forcast(model, enc_data, dec_data, input_size=1, plot=True, save=True)

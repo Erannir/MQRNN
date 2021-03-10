@@ -16,9 +16,9 @@ class Encoder(nn.Module):
     def forward(self, y, x):
         """
         Forward pass of encoder
-        :param y: data vector  # dimensions: (batch, len, input_size)
-        :param x: exogenous covariates  # dimensions: (batch, len, embed_size)
-        :return: RNN output - outputs, (last_hidden_state, last_cell_state)
+        :param y: data vector           # dimensions: (batch, seq_len, input_size)
+        :param x: exogenous covariates  # dimensions: (batch, seq_len, embed_size)
+        :return: RNN output - outputs, (last_hidden_state, last_cell_state)  # dimensions: (batch, seq_len, hidden_size)
         """
         input = torch.cat((y, x), 2)
         return self.lstm(input)
@@ -47,7 +47,7 @@ class Decoder(nn.Module):
         Forward pass of Decoder
         :param hidden_states: hidden states (not only last) returned from encoder  # dimensions: train - (batch, seq_len, hidden_size) / eval - (batch, hidden_size)
         :param x_f: future exogenous covariates                                    # dimensions: train - (batch, seq_len, horizon, embed_size) / eval - (batch, horizon, embed_size)
-        :return: quantiles estimation, according to list given in initialization   # dimensions: (batch, seq_len, horizon, num_quantiles)
+        :return: quantiles estimation, according to list given in initialization   # dimensions: train - (batch, seq_len, horizon, num_quantiles)/ eval - (batch, horizon, num_quantiles)
         """
         # In eval, all dimensions of seq_len disappear (reducing dimensionality by 1)
         x_f_reshaped = x_f.reshape(*x_f.shape[:-2], -1)             # dimensions: (batch, seq_len, horizon * embed_size)
@@ -89,15 +89,14 @@ class MQRNN(nn.Module):
         """
         Forward pass of MQRNN
         :param y_e: data vector  # dimensions: (batch, len, input_size)
-        :param x_e: exogenous covariates  # dimensions: (batch, len, embed_size)
-        :param y_d: data vector  # dimensions: (batch, horizon, input_size)
-        :param x_d: exogenous covariates  # dimensions: (batch, horizon, embed_size)
-        :return: predictions of quantiles. # dimensions: (batch, len(hidden_states), horizon, len(quantiles))
+        :param x_e: exogenous covariates   # dimensions: (batch, seq_len, embed_size)
+        :param x_d: exogenous covariates   # dimensions: (batch, horizon, embed_size)
+        :return: predictions of quantiles. # dimensions: (batch, seq_len, horizon, num_quantiles)
         """
         # currently len(hidden_states) = 1
         hidden_states, (last_h, last_c) = self.encoder(y_e, x_e)     # dimensions: (batch, seq_len, hidden_size)
         if self.training:
-            predictions = self.decoder(hidden_states, x_d)           # dimensions: (batch, seq_len, horizon, len(quantiles))
+            predictions = self.decoder(hidden_states, x_d)           # dimensions: (batch, seq_len, horizon, num_quantiles)
         else:
-            predictions = self.decoder(last_h.squeeze(), x_d)      # dimensions: (batch, horizon, len(quantiles))
+            predictions = self.decoder(last_h.squeeze(), x_d)        # dimensions: (batch, horizon, num_quantiles)
         return predictions

@@ -60,10 +60,8 @@ class ElectricityLoadDataset(Dataset):
         self.raw_data["winter_daily_cycle"] = self.raw_data["daily_cycle"] * self.raw_data["winter"]
         self.raw_data["summer_daily_cycle"] = self.raw_data["daily_cycle"] * (1 - self.raw_data["winter"])
 
-        #self.calendar_features = ["yearly_cycle", "weekly_cycle", "daily_cycle"]
         calendar_features = ["yearly_cycle", "weekly_cycle", "daily_cycle", "weekend", "night", "winter", "Holiday", "summer_daily_cycle", "winter_daily_cycle"]
         self.calendar_features = [val for i, val in enumerate(calendar_features) if i in self.features]
-
 
     def __len__(self):
         return self.samples.shape[0]
