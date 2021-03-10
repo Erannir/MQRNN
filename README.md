@@ -21,6 +21,6 @@ Please be sure to have the following folders under your code folder:
 * graphs - if you chose to save the graphs created in Estimator.forecast().
 
 ## Submitted by
-Tomer Koren
-Tzika Duetsch
-Eran Nir
+* Tomer Koren
+* Zvika Duetsch
+* Eran Nir
